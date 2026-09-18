@@ -327,8 +327,8 @@ async function load() {{
   const r = await fetch('/match/{match_id}/replay');
   if (!r.ok) {{ info.textContent = 'Реплей не найден'; return; }}
   frames = await r.json();
-  info.textContent = 'Кадров: ' + frames.length + ' - нажми "Записать видео"';
-  drawState(frames[frames.length-1], canvas);
+  info.textContent = 'Кадров: ' + frames.length;
+  await play();
 }}
 
 async function play() {{
@@ -339,7 +339,7 @@ async function play() {{
     info.textContent = 'Кадр ' + (i+1) + ' / ' + frames.length + ' tick ' + st.tick +
       ' red ' + ra + '/' + tw + ' blue ' + ba + '/' + tw +
       (st.finished ? ' победил ' + st.winner : '');
-    await new Promise(res => setTimeout(res, 100));
+    await new Promise(res => setTimeout(res, 150));
   }}
 }}
 
