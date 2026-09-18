@@ -186,14 +186,14 @@ canvas { image-rendering: pixelated; display:block; margin:8px 0;
 .row { padding:6px 0; border-bottom:1px solid #333; }
 .red { color:#E53935; } .blue { color:#2196F3; }
 .btn { display:inline-block; padding:8px 14px; background:#7CB342; color:#000;
-       text-decoration:none; margin:4px 4px 4px 0; font-weight:bold; }
+       text-decoration:none; margin:4px 4px 4px 0; font-weight:bold; cursor:pointer; border:none; }
 </style>
 """
 
 JS_CANVAS = """
 <script>
-const CELL = 15;
-const W = 30, H = 30;
+const CELL = 25;
+const W = 15, H = 15;
 function drawState(state, canvas) {
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
@@ -210,7 +210,7 @@ function drawState(state, canvas) {
   if (state.apple) {
     const [x, y] = state.apple;
     ctx.fillStyle = '#FF1744';
-    ctx.fillRect(x*CELL + 2, y*CELL + 2, CELL - 4, CELL - 4);
+    ctx.fillRect(x*CELL + 4, y*CELL + 4, CELL - 8, CELL - 8);
   }
   drawSnake(ctx, state.red.body, '#C62828');
   drawSnake(ctx, state.blue.body, '#1565C0');
@@ -229,13 +229,13 @@ function drawState(state, canvas) {
       dx = hx - body[1][0];
       dy = hy - body[1][1];
     }
-    const eye = 3;
+    const eye = 5;
     let ex = hx*CELL + CELL/2 - eye/2;
     let ey = hy*CELL + CELL/2 - eye/2;
-    if (dx > 0) ex = hx*CELL + CELL - eye - 2;
-    else if (dx < 0) ex = hx*CELL + 2;
-    if (dy > 0) ey = hy*CELL + CELL - eye - 2;
-    else if (dy < 0) ey = hy*CELL + 2;
+    if (dx > 0) ex = hx*CELL + CELL - eye - 4;
+    else if (dx < 0) ex = hx*CELL + 4;
+    if (dy > 0) ey = hy*CELL + CELL - eye - 4;
+    else if (dy < 0) ey = hy*CELL + 4;
     ctx.fillStyle = '#000';
     ctx.fillRect(ex, ey, eye, eye);
   }
@@ -276,7 +276,7 @@ def matches_page():
 def watch_page(match_id: str):
     return f"""<html><head><title>Матч {match_id[:8]}</title>{BASE_STYLE}</head><body>
 <h1>Матч {match_id[:8]}</h1>
-<canvas id="c" width="{30*15}" height="{30*15}"></canvas>
+<canvas id="c" width="{15*25}" height="{15*25}"></canvas>
 <div id="info">Загрузка...</div>
 <p><a class="btn" href="/matches">К списку</a></p>
 {JS_CANVAS}
@@ -289,7 +289,8 @@ async function tick() {{
     if (r.ok) {{
       const st = await r.json();
       drawState(st, canvas);
-      info.innerHTML = `<span class="red">${{st.red_name}}</span> vs <span class="blue">${{st.blue_name}}</span> tick ${{st.tick}}` +
+      const ra = st.red.apples, ba = st.blue.apples, tw = st.apples_to_win;
+      info.innerHTML = `<span class="red">${{st.red_name}}</span> ${{ra}}/${{tw}} vs <span class="blue">${{st.blue_name}}</span> ${{ba}}/${{tw}} tick ${{st.tick}}` +
         (st.finished ? ` победил ${{st.winner}}` : '');
       if (st.finished) return;
     }}
@@ -305,25 +306,63 @@ tick();
 def replay_page(match_id: str):
     return f"""<html><head><title>Реплей {match_id[:8]}</title>{BASE_STYLE}</head><body>
 <h1>Реплей {match_id[:8]}</h1>
-<canvas id="c" width="{30*15}" height="{30*15}"></canvas>
+<canvas id="c" width="{15*25}" height="{15*25}"></canvas>
 <div id="info">Загрузка...</div>
-<p><a class="btn" href="/matches">К списку</a></p>
+<p>
+<a class="btn" href="/matches">К списку</a>
+<button class="btn" id="rec">Записать видео</button>
+<a class="btn" id="dl" style="display:none;" download="replay_{match_id[:8]}.webm">Скачать видео</a>
+</p>
 {JS_CANVAS}
 <script>
 const canvas = document.getElementById('c');
 const info = document.getElementById('info');
-async function play() {{
+const recBtn = document.getElementById('rec');
+const dlBtn = document.getElementById('dl');
+let frames = [];
+let recorder = null;
+let chunks = [];
+
+async function load() {{
   const r = await fetch('/match/{match_id}/replay');
   if (!r.ok) {{ info.textContent = 'Реплей не найден'; return; }}
-  const frames = await r.json();
+  frames = await r.json();
+  info.textContent = 'Кадров: ' + frames.length + ' - нажми "Записать видео"';
+  drawState(frames[frames.length-1], canvas);
+}}
+
+async function play() {{
   for (let i = 0; i < frames.length; i++) {{
     const st = frames[i];
     drawState(st, canvas);
-    info.textContent = `Кадр ${{i+1}} / ${{frames.length}} tick ${{st.tick}}` +
-      (st.finished ? ` победил ${{st.winner}}` : '');
+    const ra = st.red.apples, ba = st.blue.apples, tw = st.apples_to_win;
+    info.textContent = 'Кадр ' + (i+1) + ' / ' + frames.length + ' tick ' + st.tick +
+      ' red ' + ra + '/' + tw + ' blue ' + ba + '/' + tw +
+      (st.finished ? ' победил ' + st.winner : '');
     await new Promise(res => setTimeout(res, 100));
   }}
 }}
-play();
+
+recBtn.addEventListener('click', async () => {{
+  if (!frames.length) return;
+  const stream = canvas.captureStream(30);
+  const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+    ? 'video/webm;codecs=vp9' : 'video/webm';
+  recorder = new MediaRecorder(stream, {{ mimeType: mime }});
+  chunks = [];
+  recorder.ondataavailable = e => {{ if (e.data.size) chunks.push(e.data); }};
+  recorder.onstop = () => {{
+    const blob = new Blob(chunks, {{ type: 'video/webm' }});
+    dlBtn.href = URL.createObjectURL(blob);
+    dlBtn.style.display = 'inline-block';
+    recBtn.textContent = 'Записать ещё раз';
+  }};
+  recorder.start();
+  recBtn.disabled = true;
+  await play();
+  setTimeout(() => {{ recorder.stop(); recBtn.disabled = false; }}, 500);
+}});
+
+load();
 </script>
 </body></html>"""

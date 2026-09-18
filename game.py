@@ -1,9 +1,10 @@
 import random
 from dataclasses import dataclass
 
-WIDTH = 30
-HEIGHT = 30
+WIDTH = 15
+HEIGHT = 15
 INITIAL_LENGTH = 5
+APPLES_TO_WIN = 15
 
 DIRECTIONS = {
     "up": (0, -1),
@@ -19,26 +20,34 @@ class Snake:
     body: list
     direction: str
     alive: bool = True
+    apples: int = 0
 
     @property
     def head(self):
         return self.body[0]
 
     def to_dict(self):
-        return {"name": self.name, "body": self.body, "alive": self.alive}
+        return {
+            "name": self.name,
+            "body": self.body,
+            "alive": self.alive,
+            "apples": self.apples,
+        }
 
 
 class Game:
     def __init__(self):
         self.red = Snake(
             "red",
-            [(10, 15), (9, 15), (8, 15), (7, 15), (6, 15)],
+            [(4, 2), (3, 2), (2, 2), (1, 2), (0, 2)],
             direction="right",
+            apples=0,
         )
         self.blue = Snake(
             "blue",
-            [(19, 15), (20, 15), (21, 15), (22, 15), (23, 15)],
+            [(10, 12), (11, 12), (12, 12), (13, 12), (14, 12)],
             direction="left",
+            apples=0,
         )
         self.apple = self._spawn_apple()
         self.tick = 0
@@ -64,6 +73,7 @@ class Game:
             "apple": self.apple,
             "winner": self.winner,
             "finished": self.finished,
+            "apples_to_win": APPLES_TO_WIN,
         }
 
     def step(self, red_dir, blue_dir):
@@ -124,10 +134,21 @@ class Game:
                 red_ate = False
 
         if red_ate or blue_ate:
+            if red_ate:
+                self.red.apples += 1
+            if blue_ate:
+                self.blue.apples += 1
             self.apple = self._spawn_apple()
         else:
             self.red.body.pop()
             self.blue.body.pop()
 
+        if self.red.apples >= APPLES_TO_WIN:
+            self.winner = "red"
+            self.finished = True
+        elif self.blue.apples >= APPLES_TO_WIN:
+            self.winner = "blue"
+            self.finished = True
+
         self.history.append(self.state())
-        return True
+        return not self.finished
